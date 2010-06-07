@@ -1,0 +1,30 @@
+<?php
+
+/**
+ *  Implements hook_menu().
+ *  Arg(1) is the node
+ *  Arg(2) is the comment id
+ */
+function nodejs_menu() {
+  return array(
+    'comment/%node/%/js' => array(
+      'page callback' => 'nodejs_raw_comment',
+      'page arguments' => array(1, 2),
+      'access callback' => TRUE,
+    ),
+  );
+}
+
+/**
+ *  Get a raw comment for NodeJS
+ *
+ *  @param $comment
+ *  Fully comment object
+ *  @return
+ *  Return a JSON object with raw comment
+ */
+function nodejs_raw_comment($node, $cid) {
+  $comment_obj = _comment_load($cid);
+  $comment = theme('comment_view', $comment_obj, $node);
+  return drupal_json($comment);
+}
