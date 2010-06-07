@@ -1,0 +1,18 @@
+<html>
+<head>
+  <script type="text/javascript" src="/public/jquery.js"></script>
+  <script type="text/javascript" src="/public/faye-client-min.js"></script>
+</head>
+<body>
+<h1>Test of faye</h1>
+<script type="text/javascript">
+var client = new Faye.Client('/comet', { timeout: 60 });
+
+client.subscribe('/node/123', function(message) {
+  $('#messages').append('<p>' + message.comment_id + '</p>')
+});
+</script>
+
+<div id="messages"></div>
+</body>
+</html>
