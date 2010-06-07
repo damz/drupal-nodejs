@@ -21,11 +21,22 @@ http.createServer(function(request, response) {
   var path = (request.url === '/') ? '/index.html' : request.url;
 
   var matches;
-  if (matches = /^\/publish\/(\d+)\/(\d+)/.exec(path)) {
-    var client = comet.getClient();
-    client.publish('/node/' + matches[1], { comment_id: matches[2] });
-    response.writeHead(200, {'Content-Type': 'text/html'});
-    response.end();
+  if (request.method === "POST" && ((matches = /^\/publish\/(\d+)/.exec(path)))) {
+    request.body = '';
+    request
+      .addListener('data', function (chunk) {
+        request.body += chunk;
+      })
+      .addListener('end', function () {
+        var client = comet.getClient();
+        var data = JSON.parse(request.body);
+        sys.puts(request.body);
+        client.publish('/node/' + matches[1], data);
+        sys.puts(sys.inspect(data));
+        response.writeHead(200, {'Content-Type': 'text/html'});
+        response.end();
+      });
+    return;
   }
 
   fs.readFile(PUBLIC_DIR + path, function(err, content) {
