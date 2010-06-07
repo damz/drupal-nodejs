@@ -1,4 +1,29 @@
 <?php
+// TODO > NEW, pager, gérer la mise à jour d'un commentaire
+// Indent qui déconne si suppression d'un parent (supprimer les indent vides)
+// Suppression > Créer un "bon" selecteur pour supprimer les bons éléments du dom liés au bon commentaire
+// Page d'administration pour les urls (DEFINE)
+// Gestion des "odd" / "even"
+
+define('NODEJS_URL', 'http://nodejs.dev.c--g.net:3000/');
+
+
+function nodejs_init() {
+  if (arg(0) == "node" && is_numeric(arg(1))) {
+    $page = 0;
+    if (isset($_GET['page'])) {
+      $page = $_GET['page'];
+    }
+    drupal_add_js(array(
+      'nodejs' => array(
+        'nid' => arg(1),
+        'page' => $page,
+      ),
+    ), "setting");
+    drupal_add_js(drupal_get_path('module', 'nodejs') . '/faye-client-min.js');
+    drupal_add_js(drupal_get_path('module', 'nodejs') . '/nodejs.js');
+  }
+}
 
 /**
  *  Implements hook_menu().
@@ -7,12 +32,21 @@
  */
 function nodejs_menu() {
   return array(
-    'comment/%node/js' => array(
+    'node/%node/comment/%/js' => array(
       'page callback' => 'nodejs_raw_comment',
+      'page arguments' => array(1, 3),
+      'access callback' => TRUE,
+    ),
+    'node/%node/comment/json' => array(
+      'page callback' => 'nodejs_tree_page',
       'page arguments' => array(1),
       'access callback' => TRUE,
     ),
   );
+}
+
+function nodejs_tree_page($node) {
+  drupal_json(array("data" => nodejs_get_tree($node)));
 }
 
 /**
@@ -23,122 +57,107 @@ function nodejs_menu() {
  *  @return
  *  Return a JSON object with raw comment
  */
-function nodejs_raw_comment($node) {
-  $comment_obj = nodejs_render($node);
-  return drupal_json($comment);
-}
-
-/**
- * Renders comment(s).
- * This function is a duplication of comment_render()
- * but with less stuff (can't do differently without any hook)
- */
-function nodejs_render($node) {
-  global $user;
-
-  $output = '';
-
-  if (user_access('access comments')) {
-    // Pre-process variables.
-    $nid = $node->nid;
-    if (empty($nid)) {
-      $nid = 0;
-    }
-
-    $mode = _comment_get_display_setting('mode', $node);
-    $order = _comment_get_display_setting('sort', $node);
-    $comments_per_page = _comment_get_display_setting('comments_per_page', $node);
-
-    // Multiple comment view
-    $query_count = 'SELECT COUNT(*) FROM {comments} c WHERE c.nid = %d';
-    $query = 'SELECT c.cid as cid, c.pid, c.nid, c.subject, c.comment, c.format, c.timestamp, c.name, c.mail, c.homepage, u.uid, u.name AS registered_name, u.signature, u.signature_format, u.picture, u.data, c.thread, c.status FROM {comments} c INNER JOIN {users} u ON c.uid = u.uid WHERE c.nid = %d';
-
-    $query_args = array($nid);
+function nodejs_raw_comment($node, $cid = FALSE) {
+  $comment_output = '';
+   
+   // Single comment view.
+    $query = 'SELECT c.cid, c.pid, c.nid, c.subject, c.comment, c.format, c.timestamp, c.name, c.mail, c.homepage, u.uid, u.name AS registered_name, u.signature, u.signature_format, u.picture, u.data, c.status FROM {comments} c INNER JOIN {users} u ON c.uid = u.uid WHERE c.cid = %d';
+    $query_args = array($cid);
     if (!user_access('administer comments')) {
       $query .= ' AND c.status = %d';
-      $query_count .= ' AND c.status = %d';
       $query_args[] = COMMENT_PUBLISHED;
     }
 
-    if ($order == COMMENT_ORDER_NEWEST_FIRST) {
-      if ($mode == COMMENT_MODE_FLAT_COLLAPSED || $mode == COMMENT_MODE_FLAT_EXPANDED) {
-        $query .= ' ORDER BY c.cid DESC';
-      }
-      else {
-        $query .= ' ORDER BY c.thread DESC';
-      }
-    }
-    else if ($order == COMMENT_ORDER_OLDEST_FIRST) {
-      if ($mode == COMMENT_MODE_FLAT_COLLAPSED || $mode == COMMENT_MODE_FLAT_EXPANDED) {
-        $query .= ' ORDER BY c.cid';
-      }
-      else {
-        // See comment above. Analysis reveals that this doesn't cost too
-        // much. It scales much much better than having the whole comment
-        // structure.
-        $query .= ' ORDER BY SUBSTRING(c.thread, 1, (LENGTH(c.thread) - 1))';
-      }
-    }
     $query = db_rewrite_sql($query, 'c', 'cid');
-    $query_count = db_rewrite_sql($query_count, 'c', 'cid');
+    $result = db_query($query, $query_args);
 
-    // Start a form, for use with comment control.
-    $result = pager_query($query, $comments_per_page, 0, $query_count, $query_args);
-
-    $divs = 0;
-    $num_rows = FALSE;
-    $comments = '';
-    drupal_add_css(drupal_get_path('module', 'comment') .'/comment.css');
-    while ($comment = db_fetch_object($result)) {
-      $comment = drupal_unpack($comment);
+    if ($comment = db_fetch_object($result)) {
       $comment->name = $comment->uid ? $comment->registered_name : $comment->name;
-      $comment->depth = count(explode('.', $comment->thread)) - 1;
+      $links = module_invoke_all('link', 'comment', $comment, 1);
+      drupal_alter('link', $links, $node);
 
-      if ($mode == COMMENT_MODE_THREADED_COLLAPSED || $mode == COMMENT_MODE_THREADED_EXPANDED) {
-        if ($comment->depth > $divs) {
-          $divs++;
-          $comments .= '<div class="indented">';
-        }
-        else {
-          while ($comment->depth < $divs) {
-            $divs--;
-            $comments .= '</div>';
-          }
-        }
-      }
-
-      if ($mode == COMMENT_MODE_FLAT_COLLAPSED) {
-        $comments .= theme('comment_flat_collapsed', $comment, $node);
-      }
-      else if ($mode == COMMENT_MODE_FLAT_EXPANDED) {
-        $comments .= theme('comment_flat_expanded', $comment, $node);
-      }
-      else if ($mode == COMMENT_MODE_THREADED_COLLAPSED) {
-        $comments .= theme('comment_thread_collapsed', $comment, $node);
-      }
-      else if ($mode == COMMENT_MODE_THREADED_EXPANDED) {
-        $comments .= theme('comment_thread_expanded', $comment, $node);
-      }
-
-      $num_rows = TRUE;
+      $comment_output .= theme('comment_view', $comment, $node, $links);
     }
-    while ($divs-- > 0) {
-      $comments .= '</div>';
-    }
+   
+   
+   drupal_json(array("data" => $comment_output));
+}
 
-    $output .= $comments;
-    $output .= theme('pager', NULL, $comments_per_page, 0);
+/**
+ * Renders comment(s) tree.
+ */
+function nodejs_get_tree($node) {
+  global $user;
 
-    // If enabled, show new comment form if it's not already being displayed.
-    $reply = arg(0) == 'comment' && arg(1) == 'reply';
-    if (user_access('post comments') && node_comment_mode($nid) == COMMENT_NODE_READ_WRITE && (variable_get('comment_form_location_'. $node->type, COMMENT_FORM_SEPARATE_PAGE) == COMMENT_FORM_BELOW) && !$reply) {
-      $output .= comment_form_box(array('nid' => $nid), t('Post new comment'));
-    }
-
-    // if ($output) {
-    //   $output = theme('comment_wrapper', $output, $node);
-    // }
+  if (!user_access('access comments')) {
+    return array();
   }
 
-  return $output;
+  $mode = _comment_get_display_setting('mode', $node);
+  $order = _comment_get_display_setting('sort', $node);
+  $comments_per_page = _comment_get_display_setting('comments_per_page', $node);
+
+  // Multiple comment view
+  $query_count = 'SELECT COUNT(*) FROM {comments} c WHERE c.nid = %d';
+  $query = 'SELECT c.cid as cid, c.pid, c.nid, c.subject, c.comment, c.format, c.timestamp, c.name, c.mail, c.homepage, u.uid, u.name AS registered_name, u.signature, u.signature_format, u.picture, u.data, c.thread, c.status FROM {comments} c INNER JOIN {users} u ON c.uid = u.uid WHERE c.nid = %d';
+  $query_args = array($node->nid);
+  $query .= ' AND c.status = %d';
+  $query_count .= ' AND c.status = %d';
+  $query_args[] = COMMENT_PUBLISHED;
+
+  if ($order == COMMENT_ORDER_NEWEST_FIRST) {
+    if ($mode == COMMENT_MODE_FLAT_COLLAPSED || $mode == COMMENT_MODE_FLAT_EXPANDED) {
+      $query .= ' ORDER BY c.cid DESC';
+    }
+    else {
+      $query .= ' ORDER BY c.thread DESC';
+    }
+  }
+  else if ($order == COMMENT_ORDER_OLDEST_FIRST) {
+    if ($mode == COMMENT_MODE_FLAT_COLLAPSED || $mode == COMMENT_MODE_FLAT_EXPANDED) {
+      $query .= ' ORDER BY c.cid';
+    }
+    else {
+      // See comment above. Analysis reveals that this doesn't cost too
+      // much. It scales much much better than having the whole comment
+      // structure.
+      $query .= ' ORDER BY SUBSTRING(c.thread, 1, (LENGTH(c.thread) - 1))';
+    }
+  }
+  $query = db_rewrite_sql($query, 'c', 'cid');
+  $query_count = db_rewrite_sql($query_count, 'c', 'cid');
+
+  // Start a form, for use with comment control.
+  $result = db_query($query, $query_args);
+  $count = 0;
+  $comments = array();
+  while ($comment = db_fetch_object($result)) {
+    $comment = drupal_unpack($comment);
+    $comment->name = $comment->uid ? $comment->registered_name : $comment->name;
+    $comment->depth = count(explode('.', $comment->thread)) - 1;
+    $page_offset = floor($count / $comments_per_page);
+    $comments[$page_offset][] = array(
+      'cid' => $comment->cid,
+      'depth' => $comment->depth,
+    );
+    $count++;
+  }
+  return $comments;
+}
+
+/**
+ * Implements hook_comment().
+ */
+function nodejs_comment($comment, $op) {
+  if ($op == "insert" || $op == "delete") {
+    // Get the comments tree and send it to nodejs
+    if (is_object($comment)) {
+      $node = node_load($comment->nid);
+    }
+    else {
+      $node = node_load($comment["nid"]);
+    }
+    $comments_tree = nodejs_get_tree($node);
+    drupal_http_request(NODEJS_URL . 'publish/' . $node->nid, array(), 'POST', drupal_to_js($comments_tree));
+  }
 }
