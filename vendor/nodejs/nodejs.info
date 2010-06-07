@@ -1,3 +1,5 @@
 name = Nodejs
 description = lol
 core = 6.x
+dependencies[] = jquery_ui
+

@@ -20,6 +20,8 @@ function nodejs_init() {
         'page' => $page,
       ),
     ), "setting");
+
+    jquery_ui_add(array('effects.core'));
     drupal_add_js(drupal_get_path('module', 'nodejs') . '/faye-client-min.js');
     drupal_add_js(drupal_get_path('module', 'nodejs') . '/nodejs.js');
   }

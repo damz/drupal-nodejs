@@ -43,7 +43,11 @@ Drupal.behaviors.nodejs = function() {
             previous_comment.after(addedComment);
           }
         }
-        addedComment.hide().fadeIn(500);
+        addedComment.find('div.comment').hide().fadeIn(500, function() {
+          $(this).animate({ backgroundColor: '#ffffe0' }, 3000, function() {
+            $(this).animate({ backgroundColor: '#ffffff' }, 30000);
+          });
+        });
       }
     } 
     $('#comments a[id^=comment-]').each(function() {
