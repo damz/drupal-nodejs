@@ -75,13 +75,13 @@ Drupal.behaviors.nodejs = function() {
     // For performance, prepare a hash of the visible comments.
     var visible_comments = {}
     for (i in tree) {
-      comments[tree[i].cid] = true;
+      visible_comments[tree[i].cid] = true;
     }
 
     // Iterate over the DOM and remove the comments that are not in the hash.
     $('#comments a[id^=comment-]').each(function() {
       var cid = $(this).attr('id').substr(8);
-      if (!comments[cid]) {
+      if (!visible_comments[cid]) {
         // Remove everything between the <a id="comment-[id]" /> and the div.comment.
         var current = $('#comments a#comment-' + cid), next;
         while (current.filter('div.comment').length == 0) {
