@@ -1,4 +1,4 @@
-var client = new Faye.Client('http://nodejs.dev.c--g.net:3000/comet', { timeout: 60 });
+var client = new Faye.Client(Drupal.settings.nodejs.bindingUrl, { timeout: 60 });
 
 Drupal.behaviors.nodejs = function() {
   var nid = Drupal.settings.nodejs.nid;

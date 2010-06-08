@@ -5,7 +5,7 @@
 // Page d'administration pour les urls (DEFINE)
 // Gestion des "odd" / "even"
 
-define('NODEJS_URL', 'http://nodejs.dev.c--g.net:3000/');
+define('NODEJS_URL', 'http://nodejs.dev.c--g.net:3000');
 
 
 function nodejs_init() {
@@ -16,6 +16,7 @@ function nodejs_init() {
     }
     drupal_add_js(array(
       'nodejs' => array(
+        'bindingUrl' => NODEJS_URL . '/comet',
         'nid' => arg(1),
         'page' => $page,
       ),
@@ -160,6 +161,6 @@ function nodejs_comment($comment, $op) {
       $node = node_load($comment["nid"]);
     }
     $comments_tree = nodejs_get_tree($node);
-    drupal_http_request(NODEJS_URL . 'publish/' . $node->nid, array(), 'POST', drupal_to_js($comments_tree));
+    drupal_http_request(NODEJS_URL . '/publish/' . $node->nid, array(), 'POST', drupal_to_js($comments_tree));
   }
 }
